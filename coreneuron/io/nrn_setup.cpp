@@ -42,6 +42,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "coreneuron/utils/nrn_assert.h"
 #include "coreneuron/utils/nrnmutdec.h"
 #include "coreneuron/utils/memory.h"
+#include "coreneuron/mpi/nrnmpi.h"
+#include "coreneuron/mpi/nrnmpi_impl.h"
 #include "coreneuron/io/nrn_setup.hpp"
 #include "coreneuron/network/partrans.hpp"
 #include "coreneuron/io/nrn_checkpoint.hpp"
@@ -435,7 +437,7 @@ void nrn_setup(const char* filesdat,
                           gidgroups,
                           datpath,
                           strlen(restore_path) == 0 ? datpath : restore_path);
-   
+
 
     // temporary bug work around. If any process has multiple threads, no
     // process can have a single thread. So, for now, if one thread, make two.
@@ -497,7 +499,7 @@ void nrn_setup(const char* filesdat,
         coreneuron::phase_wrapper<coreneuron::phase::one>(userParams);
     } else {
         nrn_multithread_job([](NrnThread* n) {
-            Phase1 p1; 
+            Phase1 p1;
             p1.read_direct(n->id);
             NrnThread& nt = *n;
             p1.populate(nt, mut);
@@ -559,12 +561,24 @@ void nrn_setup(const char* filesdat,
     /// which is only executed by StochKV.c.
     nrn_mk_table_check();  // was done in nrn_thread_memblist_setup in multicore.c
 
-    model_size();
+    auto model_size_bytes = model_size();
+
     delete[] userParams.gidgroups;
 
     if (nrnmpi_myid == 0 && !corenrn_param.is_quiet()) {
         printf(" Setup Done   : %.2lf seconds \n", nrn_wtime() - time);
+
+        if (model_size_bytes < 1024) {
+            printf(" Model size   : %ld bytes", model_size_bytes);
+        } else if (model_size_bytes  < 1024*1024) {
+            printf(" Model size   : %.2lf kB", model_size_bytes/1024.);
+        } else if (model_size_bytes  < 1024*1024*1024) {
+            printf(" Model size   : %.2lf MB", model_size_bytes/(1024.*1024.));
+        } else {
+            printf(" Model size   : %.2lf GB", model_size_bytes/(1024.*1024.*1024.));
+        }
     }
+
     if (corenrn_param.count_mechs) {
         write_mech_report();
     }
@@ -961,11 +975,8 @@ void read_phase3(NrnThread& nt, UserParams& userParams) {
 }
 
 static size_t memb_list_size(NrnThreadMembList* tml) {
-    size_t sz_ntml = sizeof(NrnThreadMembList);
-    size_t sz_ml = sizeof(Memb_list);
-    size_t szi = sizeof(int);
-    size_t nbyte = sz_ntml + sz_ml;
-    nbyte += tml->ml->nodecount * szi;
+    size_t nbyte = sizeof(NrnThreadMembList) + sizeof(Memb_list);
+    nbyte += tml->ml->nodecount * sizeof(int);
     nbyte += corenrn.get_prop_dparam_size()[tml->index] * tml->ml->nodecount * sizeof(Datum);
 #ifdef DEBUG
     int i = tml->index;
@@ -1003,14 +1014,11 @@ size_t input_presyn_size(void) {
 
 size_t model_size(void) {
     size_t nbyte = 0;
-    size_t szd = sizeof(double);
-    size_t szi = sizeof(int);
-    size_t szv = sizeof(void*);
-    size_t sz_th = sizeof(NrnThread);
-    size_t sz_ps = sizeof(PreSyn);
-    size_t sz_psi = sizeof(InputPreSyn);
-    size_t sz_nc = sizeof(NetCon);
-    size_t sz_pp = sizeof(Point_process);
+    size_t sz_nrnThread = sizeof(NrnThread);
+    size_t sz_presyn = sizeof(PreSyn);
+    size_t sz_input_presyn = sizeof(InputPreSyn);
+    size_t sz_netcon = sizeof(NetCon);
+    size_t sz_pntproc = sizeof(Point_process);
     size_t nccnt = 0;
 
     for (int i = 0; i < nrn_nthread; ++i) {
@@ -1026,47 +1034,53 @@ size_t model_size(void) {
         }
 
         // basic thread size includes mechanism data and G*V=I matrix
-        nb_nt += sz_th;
-        nb_nt += nt._ndata * szd + nt._nidata * szi + nt._nvdata * szv;
-        nb_nt += nt.end * szi;  // _v_parent_index
+        nb_nt += sz_nrnThread;
+        nb_nt += nt._ndata * sizeof(double) + nt._nidata * sizeof(int) + nt._nvdata * sizeof(void*);
+        nb_nt += nt.end * sizeof(int);  // _v_parent_index
+
+        // spike handling
+        nb_nt += nt.n_pntproc * sz_pntproc + nt.n_netcon * sz_netcon + nt.n_presyn * sz_presyn +
+                 nt.n_input_presyn * sz_input_presyn + nt.n_weight * sizeof(double);
+        nbyte += nb_nt;
 
 #ifdef DEBUG
         printf("ncell=%d end=%d nmech=%d\n", nt.ncell, nt.end, nmech);
         printf("ndata=%ld nidata=%ld nvdata=%ld\n", nt._ndata, nt._nidata, nt._nvdata);
         printf("nbyte so far %ld\n", nb_nt);
-        printf("n_presyn = %d sz=%ld nbyte=%ld\n", nt.n_presyn, sz_ps, nt.n_presyn * sz_ps);
-        printf("n_input_presyn = %d sz=%ld nbyte=%ld\n", nt.n_input_presyn, sz_psi,
-               nt.n_input_presyn * sz_psi);
-        printf("n_pntproc=%d sz=%ld nbyte=%ld\n", nt.n_pntproc, sz_pp, nt.n_pntproc * sz_pp);
-        printf("n_netcon=%d sz=%ld nbyte=%ld\n", nt.n_netcon, sz_nc, nt.n_netcon * sz_nc);
+        printf("n_presyn = %d sz=%ld nbyte=%ld\n", nt.n_presyn, sz_presyn, nt.n_presyn * sz_presyn);
+        printf("n_input_presyn = %d sz=%ld nbyte=%ld\n", nt.n_input_presyn, sz_input_presyn,
+               nt.n_input_presyn * sz_inputPreSyn);
+        printf("n_pntproc=%d sz=%ld nbyte=%ld\n", nt.n_pntproc, sz_pntproc, nt.n_pntproc * sz_pntproc);
+        printf("n_netcon=%d sz=%ld nbyte=%ld\n", nt.n_netcon, sz_netcon, nt.n_netcon * sz_netcon);
         printf("n_weight = %d\n", nt.n_weight);
-#endif
 
-        // spike handling
-        nb_nt += nt.n_pntproc * sz_pp + nt.n_netcon * sz_nc + nt.n_presyn * sz_ps +
-                 nt.n_input_presyn * sz_psi + nt.n_weight * szd;
-        nbyte += nb_nt;
-#ifdef DEBUG
         printf("%d thread %d total bytes %ld\n", nrnmpi_myid, i, nb_nt);
 #endif
     }
 
-#ifdef DEBUG
-    printf("%d netcon pointers %ld  nbyte=%ld\n", nrnmpi_myid, nccnt, nccnt * sizeof(NetCon*));
-#endif
     nbyte += nccnt * sizeof(NetCon*);
     nbyte += output_presyn_size();
     nbyte += input_presyn_size();
 
-#ifdef DEBUG
-    printf("nrnran123 size=%ld cnt=%ld nbyte=%ld\n", nrnran123_state_size(),
-           nrnran123_instance_count(), nrnran123_instance_count() * nrnran123_state_size());
-#endif
-
     nbyte += nrnran123_instance_count() * nrnran123_state_size();
 
 #ifdef DEBUG
+    printf("%d netcon pointers %ld  nbyte=%ld\n", nrnmpi_myid, nccnt, nccnt * sizeof(NetCon*));
+    printf("nrnran123 size=%ld cnt=%ld nbyte=%ld\n", nrnran123_state_size(),
+           nrnran123_instance_count(), nrnran123_instance_count() * nrnran123_state_size());
     printf("%d total bytes %ld\n", nrnmpi_myid, nbyte);
+#endif
+
+#if NRNMPI
+    size_t global_nbyte = 0;
+    MPI_Allreduce(&nbyte,
+              &global_nbyte,
+              1,
+              MPI_UNSIGNED_LONG_LONG,
+              MPI_SUM,
+              MPI_COMM_WORLD);
+    nbyte = global_nbyte;
+
 #endif
 
     return nbyte;
