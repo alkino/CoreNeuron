@@ -81,14 +81,12 @@ if(CORENRN_ENABLE_GPU)
                               "-DDISABLE_OPENACC")
 
   # compile cuda files for multiple architecture
+  # ~~~
   cuda_add_library(
     "cudacoreneuron" ${CORENEURON_CUDA_FILES}
-    OPTIONS -arch=sm_60
-            -gencode=arch=compute_60,code=sm_60
-            -gencode=arch=compute_72,code=sm_72
-            -gencode=arch=compute_52,code=compute_52
-            -Xcompiler
-            -fPIC)
+    OPTIONS -arch=sm_60 -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_72,code=sm_72
+            -gencode=arch=compute_52,code=compute_52 -Xcompiler -fPIC)
+  # ~~~
   set(link_cudacoreneuron cudacoreneuron)
 else()
   set(link_cudacoreneuron "")
@@ -98,12 +96,13 @@ endif()
 # eion.cpp depends on CORENRN_USE_LEGACY_UNITS
 # =============================================================================
 set(LegacyFR_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/mechanism/eion.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/apps/main1.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mechanism/eion.cpp ${CMAKE_CURRENT_SOURCE_DIR}/apps/main1.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/io/global_vars.cpp)
 
-set_property(SOURCE ${LegacyFR_FILES} APPEND PROPERTY COMPILE_DEFINITIONS
-                              "CORENRN_USE_LEGACY_UNITS=${CORENRN_USE_LEGACY_UNITS}")
+set_property(
+  SOURCE ${LegacyFR_FILES}
+  APPEND
+  PROPERTY COMPILE_DEFINITIONS "CORENRN_USE_LEGACY_UNITS=${CORENRN_USE_LEGACY_UNITS}")
 
 # =============================================================================
 # run KINDERIV_PYTHON_SCRIPT to generate _kinderiv.h
@@ -123,7 +122,7 @@ add_custom_target(kin_deriv_header DEPENDS "${KINDERIV_HEADER_FILE}")
 # main coreneuron library
 add_library(
   coreneuron ${COMPILE_LIBRARY_TYPE} ${CORENEURON_HEADER_FILES} ${CORENEURON_TEMPLATE_FILES}
-                    ${CORENEURON_CODE_FILES} ${cudacorenrn_objs} ${NMODL_INBUILT_MOD_OUTPUTS})
+             ${CORENEURON_CODE_FILES} ${cudacorenrn_objs} ${NMODL_INBUILT_MOD_OUTPUTS})
 
 # need to have _kinderiv.h for mod2c generated files
 add_dependencies(coreneuron kin_deriv_header)
@@ -156,10 +155,9 @@ set_target_properties(
 # =============================================================================
 add_custom_target(
   nrniv-core ALL
-  COMMAND ${CMAKE_BINARY_DIR}/bin/nrnivmodl-core -b STATIC
-          -m ${CORENRN_MOD2CPP_BINARY}
-          -p 1
-          ${CORENEURON_PROJECT_SOURCE_DIR}/tests/integration/ring_gap/mod
+  COMMAND
+    ${CMAKE_BINARY_DIR}/bin/nrnivmodl-core -b STATIC -m ${CORENRN_MOD2CPP_BINARY} -p 1
+    ${CORENEURON_PROJECT_SOURCE_DIR}/tests/integration/ring_gap/mod
   WORKING_DIRECTORY
     ${CMAKE_BINARY_DIR}/bin
     BYPRODUCTS
