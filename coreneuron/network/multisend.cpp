@@ -223,12 +223,10 @@ void Multisend_ReceiveBuffer::enqueue() {
 
     for (int i = 0; i < count_; ++i) {
         NRNMPI_Spike* spk = buffer_[i];
-        InputPreSyn* ps;
-        std::map<int, InputPreSyn*>::iterator gid2in_it;
 
-        gid2in_it = gid2in.find(spk->gid);
+        auto gid2in_it = gid2in.find(spk->gid);
         assert(gid2in_it != gid2in.end());
-        ps = gid2in_it->second;
+        InputPreSyn* ps = gid2in_it->second;
 
         if (use_phase2_ && ps->multisend_phase2_index_ >= 0) {
             Phase2Buffer& pb = phase2_buffer_[phase2_head_++];
@@ -260,12 +258,10 @@ void Multisend_ReceiveBuffer::enqueue1() {
     busy_ = true;
     for (int i = 0; i < count_; ++i) {
         NRNMPI_Spike* spk = buffer_[i];
-        InputPreSyn* ps;
-        std::map<int, InputPreSyn*>::iterator gid2in_it;
 
-        gid2in_it = gid2in.find(spk->gid);
+        auto gid2in_it = gid2in.find(spk->gid);
         assert(gid2in_it != gid2in.end());
-        ps = gid2in_it->second;
+        InputPreSyn* ps = gid2in_it->second;
         psbuf_[i] = ps;
         if (use_phase2_ && ps->multisend_phase2_index_ >= 0) {
             Phase2Buffer& pb = phase2_buffer_[phase2_head_++];
