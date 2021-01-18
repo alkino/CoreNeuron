@@ -1047,7 +1047,7 @@ size_t model_size(bool detailed_report) {
         nb_nt += nt._ndata * sizeof(double) + nt._nidata * sizeof(int) + nt._nvdata * sizeof(void*);
         nb_nt += nt.end * sizeof(int);  // _v_parent_index
 
-        // spike handling
+        // network connectivity
         nb_nt += nt.n_pntproc * sz_pntproc + nt.n_netcon * sz_netcon + nt.n_presyn * sz_presyn +
                  nt.n_input_presyn * sz_input_presyn + nt.n_weight * sizeof(double);
         nbyte += nb_nt;
@@ -1132,9 +1132,9 @@ size_t model_size(bool detailed_report) {
           printf("Memory size information for all NrnThreads per rank\n");
           printf("------------------------------------------------------------------\n");
           printf("%22s %12s %12s %12s\n","field", "min", "max", "avg");
-          printf("%22s %12ld %12ld %15.2f\n","ncell",            global_size_data_min[0], global_size_data_max[0], global_size_data_avg[0]);
-          printf("%22s %12ld %12ld %15.2f\n","end",              global_size_data_min[1], global_size_data_max[1], global_size_data_avg[1]);
-          printf("%22s %12ld %12ld %15.2f\n","nmech",            global_size_data_min[2], global_size_data_max[2], global_size_data_avg[2]);
+          printf("%22s %12ld %12ld %15.2f\n","n_cell",           global_size_data_min[0], global_size_data_max[0], global_size_data_avg[0]);
+          printf("%22s %12ld %12ld %15.2f\n","n_compartment",    global_size_data_min[1], global_size_data_max[1], global_size_data_avg[1]);
+          printf("%22s %12ld %12ld %15.2f\n","n_mechanism",      global_size_data_min[2], global_size_data_max[2], global_size_data_avg[2]);
           printf("%22s %12ld %12ld %15.2f\n","_ndata",           global_size_data_min[3], global_size_data_max[3], global_size_data_avg[3]);
           printf("%22s %12ld %12ld %15.2f\n","_nidata",          global_size_data_min[4], global_size_data_max[4], global_size_data_avg[4]);
           printf("%22s %12ld %12ld %15.2f\n","_nvdata",          global_size_data_min[5], global_size_data_max[5], global_size_data_avg[5]);
